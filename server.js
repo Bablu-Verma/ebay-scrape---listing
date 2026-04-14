@@ -1,12 +1,13 @@
 const express = require("express");
 const { scrapeWithPagination } = require("./modules/scraper/scraper");
-const { saveProducts, loadProducts } = require("./config/db");
+const { loadProducts } = require("./config/db");
 const { listingProduct } = require("./modules/listing/listing");
 const path = require("path");
 
 const app = express();
 
 app.use(express.json());
+
 app.use(express.static(path.join(__dirname, "public")));
 
 app.post("/api/scrape", async (req, res) => {

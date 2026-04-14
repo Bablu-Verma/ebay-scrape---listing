@@ -23,6 +23,14 @@ async function listingProduct(listing_url) {
   let products = await loadProducts();
 
   try {
+    // await retry(
+    //   () =>
+    //     page.gotoSlow(
+    //       "https://www.ebay.com/lstng?draftId=5210966075812&mode=SellLikeItem",
+    //     ),
+    //   3,
+    //   "Go to Research tab",
+    // );
     await retry(() => page.gotoSlow(listing_url), 3, "Go to Research tab");
   } catch (e) {
     console.log("Failed to goto research tab", e);
@@ -38,7 +46,7 @@ async function listingProduct(listing_url) {
   for (let i = 0; i < products.length; i++) {
     const product = products[i];
     try {
-      // ❌ skip already listed
+      //     // ❌ skip already listed
       if (product.listed === true) {
         console.log(`⏭️ Skipping (already listed): ${product.title}`);
         continue;
@@ -146,19 +154,16 @@ async function listingProduct(listing_url) {
 
       await delay(2000, 4000);
 
-      const frameHandle = await safeWaitFor(
-        page,
-        "#se-rte-frame__summary",
-        15000,
-      );
+      await page.evaluate((html) => {
+        const textarea = document.querySelector("textarea[name='description']");
+        if (textarea) {
+          textarea.value = html;
 
-      const frame = await frameHandle.contentFrame();
-
-      await frame.evaluate((html) => {
-        document.body.innerHTML = html;
+          // 🔥 VERY IMPORTANT (React trigger)
+          textarea.dispatchEvent(new Event("input", { bubbles: true }));
+          textarea.dispatchEvent(new Event("change", { bubbles: true }));
+        }
       }, product.description);
-
-      console.log("✅ Description inserted inside iframe");
 
       await delay(2000, 4000);
 
@@ -201,15 +206,15 @@ async function listingProduct(listing_url) {
 
       await delay(4000, 8000);
 
+      await handleToggle(page);
+
+      await delay(4000, 8000);
+
       const comboInput = "input[name='shippingPolicyId']";
 
       const optionText = numericPrice < 60 ? "60 se kam" : "61 se jada";
 
       await selectDropdown(page, comboInput, optionText);
-
-      await delay(6000, 9000);
-
-      handleToggle(page);
 
       await delay(4000, 8000);
 
@@ -223,7 +228,8 @@ async function listingProduct(listing_url) {
       console.log("💾 Saved in draft");
 
       product.listed = true;
-      updateProduct(product);
+
+      await updateProduct(product);
 
       await delay(2000, 5000);
 

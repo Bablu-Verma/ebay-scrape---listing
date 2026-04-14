@@ -1,65 +1,35 @@
-const { delay, randomBehavior, detectCaptcha, retry, safeWaitFor, safeEvaluate } = require("../../utils/utils");
+const { delay } = require("../../utils/utils");
 
 async function selectDropdown(page, selector, text) {
   try {
-    // STEP 1: wait + open dropdown
-    await safeWaitFor(page, selector, 15000);
-    await randomBehavior(page);
+    await page.waitForSelector(selector, { visible: true });
 
-    await retry(() => page.click(selector), 3, "click dropdown");
-    await page.focus(selector);
+    // click input
+    await page.click(selector, { clickCount: 3 });
 
-    // force open
-    await page.keyboard.press("ArrowDown");
+    // clear + type
+    await page.keyboard.press("Backspace");
+    await page.keyboard.type(text, { delay: 100 });
 
+    // wait for suggestions
     await delay(2000, 4000);
 
-    // STEP 2: try selecting option
-    const selected = await page.evaluate((text) => {
-      const options = document.querySelectorAll("[role='option']");
+    // select first match
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("Enter");
 
-      for (let opt of options) {
-        const label = opt.innerText.trim();
-
-        if (label.startsWith(text)) {
-          opt.scrollIntoView({ block: "center" });
-
-          // 🔥 FULL EVENT CHAIN
-          opt.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
-          opt.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
-          opt.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-
-          return true;
-        }
-      }
-
-      return false;
-    }, text);
-
-    // STEP 3: fallback अगर नहीं मिला
-    if (!selected) {
-      console.log("⚠️ Fallback typing:", text);
-
-      await page.click(selector, { clickCount: 3 });
-      await page.keyboard.type(text);
-      await page.keyboard.press("Enter");
-    } else {
-      console.log("✅ Selected text:", text);
-    }
-
-    // STEP 4: confirm value set
-    await randomBehavior(page);
+    // confirm
     await page.waitForFunction(
       (selector, text) => {
-        const input = document.querySelector(selector);
-        return input && input.value.includes(text);
+        const el = document.querySelector(selector);
+        return el && el.value.toLowerCase().includes(text.toLowerCase());
       },
       {},
       selector,
       text,
     );
 
-    console.log("🎯 Selected Confirmed:", text);
+    console.log("✅ Dropdown selected:", text);
   } catch (err) {
     console.log("❌ Dropdown error:", err.message);
   }
@@ -67,32 +37,61 @@ async function selectDropdown(page, selector, text) {
 
 async function handleToggle(page) {
   try {
-    const toggleSelector = "input[role='switch']";
+    // ✅ General toggle ka input selector (FIRST one)
+    const inputSelector = ".fai-program-wrapper:first-child .switch__control";
 
-    await safeWaitFor(page, toggleSelector, 15000);
-    await randomBehavior(page);
+    await page.waitForSelector(inputSelector, { visible: true });
 
-    const isChecked = await retry(() => page.$eval(toggleSelector, (el) => el.checked), 3, "check toggle");
+    // ✅ Check if already ON
+    const isChecked = await page.evaluate((sel) => {
+      return document.querySelector(sel)?.checked;
+    }, inputSelector);
 
-  if (!isChecked) {
-    // click INPUT directly with JS (MOST STABLE)
-    await page.evaluate((selector) => {
-      const el = document.querySelector(selector);
-      if (el) el.click();
-    }, toggleSelector);
+    if (isChecked) {
+      console.log("✅ General Toggle already ON — skipping");
+      return;
+    }
 
-    // verify state change instead of waiting UI element
-    await page.waitForFunction(
-      (selector) => document.querySelector(selector)?.checked === true,
-      {},
-      toggleSelector,
-    );
+    console.log("⚡ Turning ON General toggle...");
 
-    console.log("🔘 Toggle turned ON");
-  } else {
-    console.log("✅ Already ON");
-  }
-  } catch(err) {
+    // 🔥 Click the input directly
+    await page.evaluate((sel) => {
+      document.querySelector(sel)?.click();
+    }, inputSelector);
+
+    // ⏳ Wait for UI update
+    await new Promise((r) => setTimeout(r, 2000));
+
+    // 🔁 Re-check
+    const nowChecked = await page.evaluate((sel) => {
+      return document.querySelector(sel)?.checked;
+    }, inputSelector);
+
+    if (nowChecked) {
+      console.log("✅ General Toggle ON SUCCESS");
+      return;
+    }
+
+    // ⚠️ Fallback: click the visual button
+    console.log("⚠️ Direct click failed, trying button...");
+    await page.evaluate(() => {
+      document
+        .querySelector(".fai-program-wrapper:first-child .switch__button")
+        ?.click();
+    });
+
+    await delay(2000, 4000);
+
+    const finalCheck = await page.evaluate((sel) => {
+      return document.querySelector(sel)?.checked;
+    }, inputSelector);
+
+    if (finalCheck) {
+      console.log("✅ General Toggle ON (via fallback)");
+    } else {
+      throw new Error("General Toggle ON nahi hua");
+    }
+  } catch (err) {
     console.log("❌ Toggle error:", err.message);
   }
 }
