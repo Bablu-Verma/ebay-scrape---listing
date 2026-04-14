@@ -5,15 +5,27 @@ const {
   getListingLinks,
   isInvalidProductPage,
 } = require("./scraper_helper");
-const { delay } = require("../../utils/utils");
+const {
+  delay,
+  detectCaptcha,
+  randomBehavior,
+  think,
+  retry,
+  safeGoto,
+  safeWaitFor,
+  safeEvaluate,
+  fullScroll,
+} = require("../../utils/utils");
 const { cleanHTML } = require("../../utils/cleanHTML");
 
 async function extractProductDetails(page) {
-  await page.waitForSelector("body", { timeout: 10000 }).catch(() => {});
+  await safeWaitFor(page, "body", 10000).catch(() => {});
+  await detectCaptcha(page);
+  await randomBehavior(page); // Act like human
 
   const desc = await getDescription(page);
 
-  const data = await page.evaluate(() => {
+  const data = await safeEvaluate(page, () => {
     // TITLE
     const title =
       document.querySelector("h1.x-item-title__mainTitle span")?.innerText ||
@@ -89,7 +101,10 @@ async function scrapePage(url) {
   const results = [];
 
   try {
-    await page.gotoSlow(url);
+    await retry(() => page.gotoSlow(url), 3, `Goto -> ${url}`);
+    await detectCaptcha(page);
+    await fullScroll(page);
+    await randomBehavior(page);
 
     const links = await getListingLinks(page);
 
@@ -97,12 +112,14 @@ async function scrapePage(url) {
 
     for (let i = 0; i < links.length; i++) {
       console.log(`➡️ Product ${i + 1}`);
-      if (i === 2) break;
 
       try {
         const link = links[i];
 
-        await page.gotoSlow(link);
+        await retry(() => page.gotoSlow(link), 3, `Goto product -> ${link}`);
+        await detectCaptcha(page);
+        await fullScroll(page);
+        await think(2000, 4000); // Thinking before interacting
 
         console.log("🌐 Opening:", link);
 
@@ -132,7 +149,7 @@ async function scrapePage(url) {
   }
 }
 
-async function scrapeWithPagination(baseUrl, maxPages = 1) {
+async function scrapeWithPagination(baseUrl, maxPages = 30) {
   let allData = [];
 
   for (let i = 1; i <= maxPages; i++) {
@@ -140,7 +157,12 @@ async function scrapeWithPagination(baseUrl, maxPages = 1) {
 
     console.log(`\n📄 PAGE ${i}`);
 
-    const data = await scrapePage(url);
+    let data = [];
+    try {
+      data = await scrapePage(url);
+    } catch (err) {
+      console.log(`⚠️ Scrape page ${i} failed:`, err.message);
+    }
 
     allData.push(...data);
 

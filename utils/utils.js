@@ -13,29 +13,65 @@ function delay(min = 3000, max = 8000) {
 // ─────────────────────────────────────────────
 async function detectCaptcha(page) {
   try {
-    const hasIframe = await page.$('iframe[src*="captcha"]');
-    const hasRecaptcha = await page.$(".g-recaptcha");
-    const hasHcaptcha = await page.$("[data-hcaptcha-sitekey]");
+    let isCaptcha = true;
+    let didDetect = false;
 
-    if (hasIframe || hasRecaptcha || hasHcaptcha) {
-      console.log("🚨 CAPTCHA DETECTED — solve manually!");
-      process.stdout.write("\x07");
+    while (isCaptcha) {
+      const result = await page.evaluate(() => {
+        const checkVisible = (el) => {
+          if (!el) return false;
+          const style = window.getComputedStyle(el);
+          return (
+            style &&
+            style.display !== "none" &&
+            style.visibility !== "hidden" &&
+            el.offsetHeight > 0
+          );
+        };
 
-      await page.bringToFront();
+        const iframe = document.querySelector('iframe[src*="captcha"]');
+        const recaptcha = document.querySelector(".g-recaptcha");
+        const hcaptcha = document.querySelector("[data-hcaptcha-sitekey]");
 
-      // wait for user solve
-      await delay(15000, 30000);
+        const visibleCaptcha =
+          checkVisible(iframe) ||
+          checkVisible(recaptcha) ||
+          checkVisible(hcaptcha);
 
-      return true;
+        const text = document.body.innerText.toLowerCase();
+
+        const hasCaptchaText =
+          text.includes("verify you are human") ||
+          text.includes("enter the characters") ||
+          text.includes("captcha");
+
+        return visibleCaptcha || hasCaptchaText;
+      });
+
+      if (result) {
+        if (!didDetect) {
+          console.log("🚨 CAPTCHA DETECTED — solve it manually!");
+          process.stdout.write("\x07");
+          await page.bringToFront();
+          didDetect = true;
+        }
+
+        console.log("⏳ Waiting 5 seconds...");
+        await delay(5000, 5000);
+      } else {
+        if (didDetect) {
+          console.log("✅ Captcha solved! Resuming...");
+        }
+        isCaptcha = false;
+      }
     }
 
-    return false;
+    return didDetect;
   } catch (err) {
-    console.log("⚠️ detectCaptcha error:", err.message);
+    console.log("⚠️ detectCaptcha warning:", err.message);
     return false;
   }
 }
-
 // ─────────────────────────────────────────────
 //  HUMAN MOUSE (SAFE)
 // ─────────────────────────────────────────────
@@ -212,12 +248,78 @@ async function isPageAlive(page) {
   }
 }
 
+// ─────────────────────────────────────────────
+//  FULL SCROLL (DOWN & UP) TO LOAD LAZY ELEMENTS
+// ─────────────────────────────────────────────
+async function fullScroll(page) {
+  try {
+    console.log("📜 Scrolling down slowly like a human...");
+    await page.evaluate(async () => {
+      await new Promise((resolve) => {
+        let totalHeight = 0;
+        let lastHeight = 0;
+        let sameHeightCount = 0;
+
+        const scrollDown = () => {
+          const distance = 150 + Math.random() * 200; // Random distance ~150-350px
+          const scrollHeight = document.body.scrollHeight;
+          window.scrollBy(0, distance);
+          totalHeight += distance;
+
+          if (scrollHeight === lastHeight) {
+            sameHeightCount++;
+          } else {
+            sameHeightCount = 0;
+            lastHeight = scrollHeight;
+          }
+
+          if (
+            totalHeight >= scrollHeight - window.innerHeight ||
+            sameHeightCount > 4
+          ) {
+            resolve();
+          } else {
+            const nextWait = 400 + Math.random() * 600; // Delay 400-1000ms
+            setTimeout(scrollDown, nextWait);
+          }
+        };
+        setTimeout(scrollDown, 500);
+      });
+    });
+
+    // Pause at the bottom
+    await delay(1000, 2000);
+    console.log("⬆️ Scrolling back up slowly...");
+
+    await page.evaluate(async () => {
+      await new Promise((resolve) => {
+        const scrollUp = () => {
+          const distance = 250 + Math.random() * 300;
+          window.scrollBy(0, -distance);
+
+          if (window.scrollY <= 0) {
+            resolve();
+          } else {
+            const nextWait = 250 + Math.random() * 400; // Scrolling up is usually slightly faster
+            setTimeout(scrollUp, nextWait);
+          }
+        };
+        setTimeout(scrollUp, 500);
+      });
+    });
+    await delay(1000, 2000);
+  } catch (err) {
+    console.log("⚠️ Full scroll error:", err.message);
+  }
+}
+
 module.exports = {
   delay,
   detectCaptcha,
   humanMouse,
   humanScroll,
   humanScrollUp,
+  fullScroll,
   think,
   randomBehavior,
   retry,

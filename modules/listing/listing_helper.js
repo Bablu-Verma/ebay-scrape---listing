@@ -1,11 +1,12 @@
-const { delay } = require("../../utils/utils");
+const { delay, randomBehavior, detectCaptcha, retry, safeWaitFor, safeEvaluate } = require("../../utils/utils");
 
 async function selectDropdown(page, selector, text) {
   try {
     // STEP 1: wait + open dropdown
-    await page.waitForSelector(selector, { timeout: 15000 });
+    await safeWaitFor(page, selector, 15000);
+    await randomBehavior(page);
 
-    await page.click(selector);
+    await retry(() => page.click(selector), 3, "click dropdown");
     await page.focus(selector);
 
     // force open
@@ -47,6 +48,7 @@ async function selectDropdown(page, selector, text) {
     }
 
     // STEP 4: confirm value set
+    await randomBehavior(page);
     await page.waitForFunction(
       (selector, text) => {
         const input = document.querySelector(selector);
@@ -64,11 +66,13 @@ async function selectDropdown(page, selector, text) {
 }
 
 async function handleToggle(page) {
-  const toggleSelector = "input[role='switch']";
+  try {
+    const toggleSelector = "input[role='switch']";
 
-  await page.waitForSelector(toggleSelector, { timeout: 15000 });
+    await safeWaitFor(page, toggleSelector, 15000);
+    await randomBehavior(page);
 
-  const isChecked = await page.$eval(toggleSelector, (el) => el.checked);
+    const isChecked = await retry(() => page.$eval(toggleSelector, (el) => el.checked), 3, "check toggle");
 
   if (!isChecked) {
     // click INPUT directly with JS (MOST STABLE)
@@ -87,6 +91,9 @@ async function handleToggle(page) {
     console.log("🔘 Toggle turned ON");
   } else {
     console.log("✅ Already ON");
+  }
+  } catch(err) {
+    console.log("❌ Toggle error:", err.message);
   }
 }
 

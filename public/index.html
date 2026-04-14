@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Scraper UI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-gray-100 p-6">
+
+    <div class="max-w-6xl mx-auto bg-white p-6 rounded shadow">
+
+        <h1 class="text-xl font-bold mb-4">🚀 Scraper Dashboard</h1>
+
+        <!-- Tabs -->
+        <div class="flex mb-4 border-b">
+            <button onclick="showTab('scrape')" id="scrapeTab"
+                class="px-4 py-2 font-medium border-b-2 border-blue-600 text-blue-600">
+                🔍 Scrape
+            </button>
+
+            <button onclick="showTab('list')" id="listTab" class="px-4 py-2 font-medium text-gray-500">
+                📦 List
+            </button>
+        </div>
+
+        <!-- 🔍 Scrape Tab -->
+        <div id="scrapeSection">
+            <label for="scrapeUrl">Enter Scrape URL</label>
+            <input id="scrapeUrl" type="text" placeholder="Enter Scrape URL" class="w-full border p-2 mb-3 rounded" />
+
+            <label for="page">Total Page Scrape</label>
+            <input id="page" type="number" placeholder="Total Page Scrape" class="w-full border p-2 mb-4 rounded" />
+
+            <button onclick="startScrape()" class="bg-blue-600 text-white px-4 py-2 rounded w-full">
+                🔍 Start Scraping
+            </button>
+
+        </div>
+
+        <!-- 📦 Listing Tab -->
+        <div id="listSection" class="hidden">
+
+            <label for="listUrl">Enter Listing URL</label>
+
+            <input id="listUrl" value="https://www.ebay.com/sh/research?marketplace=EBAY-US&tabName=SOLD" type="text"
+                placeholder="Enter Listing URL" class="w-full border p-2 mb-4 rounded" />
+
+            <button onclick="startListing()" class="bg-green-600 text-white px-4 py-2 rounded w-full">
+                📦 Start Listing
+            </button>
+
+        </div>
+
+        <!-- Status -->
+        <div id="status" class="text-sm text-gray-700 mt-4"></div>
+
+        <button onclick="loadProducts()" class="bg-purple-600 text-white px-4 py-2 rounded">
+            📋 Show Scraped Products In DB
+        </button>
+
+        <div id="productsList"></div>
+
+    </div>
+
+
+
+    <script src="app.js"></script>
+</body>
+
+</html>

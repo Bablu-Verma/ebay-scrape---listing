@@ -1,19 +1,104 @@
+const express = require("express");
 const { scrapeWithPagination } = require("./modules/scraper/scraper");
-const { save } = require("./config/db");
+const { save, loadJson } = require("./config/db");
 const { listingProduct } = require("./modules/listing/listing");
+const path = require("path");
 
-(async () => {
-  const sellerUrl =
-    "https://www.ebay.com/sch/i.html?store_name=saumya15&_ssn=saumya-15&_pgn=1&_oac=1&_fcid=1";
+const app = express();
 
-  console.log("🔍 Scraping...");
+app.use(express.json());
+app.use(express.static(path.join(__dirname, "public")));
 
-  const list = listingProduct();
+app.post("/api/scrape", async (req, res) => {
+  const { url, page } = req.body;
 
-  console.log(list);
+  let jobs = {};
 
-  // const products = await scrapeWithPagination(sellerUrl, 1);
+  if (!url || !page) {
+    return res.status(400).json({ error: "url and page required" });
+  }
 
-  // save(products);
-  // console.log("products", products);
-})();
+  const jobId = Date.now().toString();
+
+  // create job
+  jobs[jobId] = {
+    status: "processing",
+    type: "scrape",
+    progress: 0,
+  };
+
+  // 🔥 background task
+  (async () => {
+    try {
+      const products = await scrapeWithPagination(url, page);
+
+      await save(products);
+
+      jobs[jobId].status = "completed";
+      jobs[jobId].resultCount = products.length;
+    } catch (err) {
+      jobs[jobId].status = "failed";
+      jobs[jobId].error = err.message;
+    }
+  })();
+
+  // ✅ instant response
+  res.json({
+    success: true,
+    message: "Scraping started",
+    jobId,
+  });
+});
+
+app.post("/api/list", async (req, res) => {
+  const { url } = req.body;
+
+  let jobs = {};
+
+  if (!url) {
+    return res.status(400).json({ error: "url required" });
+  }
+
+  const jobId = Date.now().toString();
+
+  jobs[jobId] = {
+    status: "processing",
+    type: "listing",
+  };
+
+  (async () => {
+    try {
+      const result = await listingProduct(url);
+
+      jobs[jobId].status = "completed";
+      jobs[jobId].result = result;
+    } catch (err) {
+      jobs[jobId].status = "failed";
+      jobs[jobId].error = err.message;
+    }
+  })();
+
+  res.json({
+    success: true,
+    message: "Listing started",
+    jobId,
+  });
+});
+
+app.get("/api/products", (req, res) => {
+  try {
+    const products = loadJson();
+
+    res.json({
+      success: true,
+      count: products.length,
+      data: products,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.listen(3000, () => {
+  console.log("🚀 Server running on http://localhost:3000");
+});

@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const axios = require("axios");
+const { delay, randomBehavior, detectCaptcha, retry, safeWaitFor, safeEvaluate } = require("../../utils/utils");
 
 // async function downloadImages(imageUrls, productId) {
 //   const folderPath = path.join(process.cwd(), "images");
@@ -97,7 +98,8 @@ async function downloadImages(imageUrls, productId) {
 }
 
 async function getListingLinks(page) {
-  return await page.evaluate(() => {
+  await randomBehavior(page);
+  return await safeEvaluate(page, () => {
     const items = document.querySelectorAll("li.s-card");
     const links = [];
 
@@ -128,11 +130,11 @@ async function getListingLinks(page) {
 
 async function getDescription(page) {
   try {
-    const iframeHandle = await page.waitForSelector("#desc_ifr", {
-      timeout: 15000,
-    });
+    const iframeHandle = await safeWaitFor(page, "#desc_ifr", 15000);
 
     if (!iframeHandle) return "";
+
+    await randomBehavior(page);
 
     const frame = await iframeHandle.contentFrame();
     if (!frame) return "";
@@ -150,7 +152,7 @@ async function getDescription(page) {
 
 async function isInvalidProductPage(page) {
   try {
-    const text = await page.evaluate(() => document.body.innerText);
+    const text = await safeEvaluate(page, () => document.body.innerText);
 
     return (
       text.includes("We looked everywhere") || text.includes("page is missing")
