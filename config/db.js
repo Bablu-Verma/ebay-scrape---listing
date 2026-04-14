@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-function save(newData) {
+function saveProducts(newData) {
   let existing = [];
 
   if (fs.existsSync("products.json")) {
@@ -32,7 +32,7 @@ function save(newData) {
   console.log(`📦 Total items: ${finalData.length}`);
 }
 
-function loadJson() {
+function loadProducts() {
   try {
     if (!fs.existsSync("products.json")) return [];
 
@@ -50,4 +50,28 @@ function loadJson() {
   }
 }
 
-module.exports = { save, loadJson };
+function updateProduct(updatedItem) {
+  let existing = [];
+
+  if (fs.existsSync("products.json")) {
+    existing = JSON.parse(fs.readFileSync("products.json"));
+  }
+
+  const updatedTitle = updatedItem.title?.toLowerCase().trim();
+
+  const updatedData = existing.map((item) => {
+    const title = item.title?.toLowerCase().trim();
+
+    if (title === updatedTitle) {
+      return { ...item, ...updatedItem };
+    }
+
+    return item;
+  });
+
+  fs.writeFileSync("products.json", JSON.stringify(updatedData, null, 2));
+
+  console.log(`♻️ Updated: ${updatedItem.title}`);
+}
+
+module.exports = { saveProducts, loadProducts, updateProduct };

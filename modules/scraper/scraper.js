@@ -17,6 +17,7 @@ const {
   fullScroll,
 } = require("../../utils/utils");
 const { cleanHTML } = require("../../utils/cleanHTML");
+const { saveProducts } = require("../../config/db");
 
 async function extractProductDetails(page) {
   await safeWaitFor(page, "body", 10000).catch(() => {});
@@ -136,6 +137,7 @@ async function scrapePage(url) {
         // console.log("📦 Title:", product_det);
 
         results.push(product_det);
+        await saveProducts([product_det]);
 
         await delay(2000, 4000);
       } catch (err) {

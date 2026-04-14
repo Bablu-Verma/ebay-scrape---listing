@@ -1,4 +1,8 @@
-const { loadJson, save } = require("../../config/db");
+const {
+  loadProducts,
+  saveProducts,
+  updateProduct,
+} = require("../../config/db");
 const {
   delay,
   detectCaptcha,
@@ -16,7 +20,7 @@ const { selectDropdown, handleToggle } = require("./listing_helper");
 
 async function listingProduct(listing_url) {
   const page = await createListingPage();
-  let products = await loadJson();
+  let products = await loadProducts();
 
   try {
     await retry(() => page.gotoSlow(listing_url), 3, "Go to Research tab");
@@ -219,9 +223,22 @@ async function listingProduct(listing_url) {
       console.log("💾 Saved in draft");
 
       product.listed = true;
-      save(products);
+      updateProduct(product);
 
-      await delay(3000, 5000);
+      await delay(2000, 5000);
+
+      await retry(
+        () => page.gotoSlow(listing_url),
+        3,
+        "Go to Research tab again",
+      );
+
+      await detectCaptcha(page);
+
+      // 🔥 Scroll fully so all lazy-loaded elements render
+      await fullScroll(page);
+
+      await think(4000, 6000);
 
       continue;
     } catch (err) {
