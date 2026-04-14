@@ -10,7 +10,7 @@ const { listingProduct } = require("./modules/listing/listing");
 
   const list = listingProduct();
 
-  // console.log(list);
+  console.log(list);
 
   // const products = await scrapeWithPagination(sellerUrl, 1);
 

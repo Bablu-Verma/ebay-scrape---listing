@@ -2,6 +2,7 @@ const { loadJson, save } = require("../../config/db");
 const { delay } = require("../../utils/utils");
 const { createListingPage } = require("./listing_browser");
 const path = require("path");
+const { selectDropdown, handleToggle } = require("./listing_helper");
 
 async function listingProduct() {
   const page = await createListingPage();
@@ -157,71 +158,18 @@ async function listingProduct() {
 
     console.log("📦 Quantity set to 5");
 
-    await delay(2000, 4000);
-
-    const toggleSelector = "input[role='switch']";
-
-    await page.waitForSelector(toggleSelector, { timeout: 15000 });
-
-    // check current state
-    const istoggleChecked = await page.$eval(
-      toggleSelector,
-      (el) => el.checked,
-    );
-
-    if (!istoggleChecked) {
-      await page.click(toggleSelector);
-      console.log("🔘 Toggle turned ON");
-    } else {
-      console.log("✅ Already ON");
-    }
-
     await delay(4000, 8000);
 
     const comboInput = "input[name='shippingPolicyId']";
 
-    // open dropdown
-    await page.waitForSelector(comboInput);
-    await page.click(comboInput);
-    await page.keyboard.press("ArrowDown");
-
-    await delay(2000, 3000);
-
-    // decide text
     const optionText = numericPrice < 60 ? "60 se kam" : "61 se jada";
 
-    // select option (REAL FIX)
-    const selected = await page.evaluate((text) => {
-      const options = document.querySelectorAll("[role='option']");
+    await selectDropdown(page, comboInput, optionText);
 
-      for (let opt of options) {
-        const label = opt.innerText.trim();
+    await delay(6000, 9000);
 
-        if (label.startsWith(text)) {
-          opt.scrollIntoView({ block: "center" });
+    handleToggle(page);
 
-          // 🔥 REAL FIX (mousedown required)
-          opt.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
-
-          return true;
-        }
-      }
-
-      return false;
-    }, optionText);
-
-    // fallback
-    if (!selected) {
-      console.log("⚠️ fallback typing...");
-
-      await page.click(comboInput, { clickCount: 3 });
-      await page.keyboard.type(optionText);
-      await page.keyboard.press("Enter");
-
-      console.log("🚚 Selected via fallback:", optionText);
-    } else {
-      console.log("🚚 Selected:", optionText);
-    }
     await delay(4000, 8000);
 
     const saveBtn = "button[aria-label='Save for later']";
@@ -231,6 +179,13 @@ async function listingProduct() {
     await page.click(saveBtn);
 
     console.log("💾 Saved in draft");
+
+    product.listed = true;
+    save(products);
+
+    await delay(3000, 5000);
+
+    continue;
   }
 }
 

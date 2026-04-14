@@ -1,71 +1,12 @@
 const { createScraperPage } = require("./scraper_browser");
-const { downloadImages } = require("./image_download");
+const {
+  downloadImages,
+  getDescription,
+  getListingLinks,
+  isInvalidProductPage,
+} = require("./scraper_helper");
 const { delay } = require("../../utils/utils");
 const { cleanHTML } = require("../../utils/cleanHTML");
-
-async function getListingLinks(page) {
-  return await page.evaluate(() => {
-    const items = document.querySelectorAll("li.s-card");
-    const links = [];
-
-    items.forEach((item) => {
-      const a = item.querySelector("a.s-card__link");
-      if (!a) return;
-
-      let href = a.href || a.getAttribute("href");
-      if (!href) return;
-
-      try {
-        const url = new URL(href);
-
-        // only product pages
-        const match = url.pathname.match(/\/itm\/(\d+)/);
-        if (!match) return;
-
-        const id = match[1];
-
-        // 🔥 YOUR REQUIRED FORMAT
-        links.push(`https://www.ebay.com/itm/${id}`);
-      } catch (e) {}
-    });
-
-    return [...new Set(links)];
-  });
-}
-
-async function getDescription(page) {
-  try {
-    const iframeHandle = await page.waitForSelector("#desc_ifr", {
-      timeout: 15000,
-    });
-
-    if (!iframeHandle) return "";
-
-    const frame = await iframeHandle.contentFrame();
-    if (!frame) return "";
-
-    await frame.waitForSelector("body", { timeout: 10000 });
-
-    return await frame.evaluate(() => {
-      return document.body.innerHTML || "";
-    });
-  } catch (err) {
-    console.log("❌ Description error:", err.message);
-    return "";
-  }
-}
-
-async function isInvalidProductPage(page) {
-  try {
-    const text = await page.evaluate(() => document.body.innerText);
-
-    return (
-      text.includes("We looked everywhere") || text.includes("page is missing")
-    );
-  } catch {
-    return true;
-  }
-}
 
 async function extractProductDetails(page) {
   await page.waitForSelector("body", { timeout: 10000 }).catch(() => {});
