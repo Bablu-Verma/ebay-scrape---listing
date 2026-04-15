@@ -16,7 +16,11 @@ const {
 } = require("../../utils/utils");
 const { createListingPage } = require("./listing_browser");
 const path = require("path");
-const { selectDropdown, handleToggle } = require("./listing_helper");
+const {
+  selectDropdown,
+  handleToggle,
+  setRichTextDescription,
+} = require("./listing_helper");
 
 async function listingProduct(listing_url) {
   const page = await createListingPage();
@@ -140,38 +144,14 @@ async function listingProduct(listing_url) {
       await detectCaptcha(page);
       await randomBehavior(page);
 
-      // check if already checked
-      const isChecked = await retry(
-        () => page.$eval(htmlCheckbox, (el) => el.checked),
-        3,
-        "check eval",
-      );
-
-      if (!isChecked) {
-        await page.click(htmlCheckbox);
-        console.log("✅ HTML mode ON");
-      }
-
       await delay(2000, 4000);
 
-      await page.evaluate((html) => {
-        const textarea = document.querySelector("textarea[name='description']");
-        if (textarea) {
-          textarea.value = html;
-
-          // 🔥 VERY IMPORTANT (React trigger)
-          textarea.dispatchEvent(new Event("input", { bubbles: true }));
-          textarea.dispatchEvent(new Event("change", { bubbles: true }));
-        }
-      }, product.description);
+      await setRichTextDescription(page, product.description);
 
       await delay(2000, 4000);
-
-      await page.click(htmlCheckbox);
 
       const numericPrice = parseFloat(product.price.replace(/[^\d.]/g, "")) | 0;
 
-      await delay(2000, 4000);
       const priceSelector = "input[name='price']";
 
       await safeWaitFor(page, priceSelector, 15000);
@@ -206,15 +186,15 @@ async function listingProduct(listing_url) {
 
       await delay(4000, 8000);
 
-      await handleToggle(page);
-
-      await delay(4000, 8000);
-
       const comboInput = "input[name='shippingPolicyId']";
 
       const optionText = numericPrice < 60 ? "60 se kam" : "61 se jada";
 
       await selectDropdown(page, comboInput, optionText);
+
+      await delay(4000, 8000);
+
+      await handleToggle(page);
 
       await delay(4000, 8000);
 

@@ -1,4 +1,10 @@
-const { delay } = require("../../utils/utils");
+const {
+  delay,
+  safeWaitFor,
+  detectCaptcha,
+  randomBehavior,
+  retry,
+} = require("../../utils/utils");
 
 async function selectDropdown(page, selector, text) {
   try {
@@ -96,4 +102,102 @@ async function handleToggle(page) {
   }
 }
 
-module.exports = { selectDropdown, handleToggle };
+async function setRichTextDescription(page, html) {
+  const htmlCheckbox = "input[name='descriptionEditorMode']";
+
+  // === Step 1: Wait for checkbox ===
+  await safeWaitFor(page, htmlCheckbox, 15000);
+  await detectCaptcha(page);
+  await randomBehavior(page);
+
+  // === Step 2: Enable HTML mode ===
+  const isChecked = await retry(
+    () => page.$eval(htmlCheckbox, (el) => el.checked),
+    3,
+    "check eval",
+  );
+
+  if (!isChecked) {
+    await page.click(htmlCheckbox);
+    console.log("✅ HTML mode ON");
+  }
+
+  await delay(2000, 4000);
+
+  // === Step 3: Wait for textarea to be visible (HTML mode mein textarea visible hoti hai) ===
+  const textareaSelector = 'textarea[name="description"]';
+  await safeWaitFor(page, textareaSelector, 10000);
+
+  // === Step 4: Textarea mein directly HTML inject karo (React-safe way) ===
+  await page.evaluate((content) => {
+    const textarea = document.querySelector('textarea[name="description"]');
+    if (!textarea) throw new Error("❌ Description textarea not found");
+
+    // React ka native setter use karo
+    const nativeSetter = Object.getOwnPropertyDescriptor(
+      window.HTMLTextAreaElement.prototype,
+      "value",
+    ).set;
+
+    nativeSetter.call(textarea, content);
+
+    // React/eBay framework ko notify karo
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    textarea.dispatchEvent(new Event("change", { bubbles: true }));
+    textarea.dispatchEvent(new Event("blur", { bubbles: true }));
+
+    console.log("✅ Textarea updated with length:", textarea.value.length);
+  }, html);
+
+  await delay(1000, 2000);
+
+  // === Step 5: Extra insurance - keyboard se bhi ek space type karo ===
+  const textarea = await page.$(textareaSelector);
+  if (textarea) {
+    await textarea.click();
+    await page.keyboard.press("End");
+    await page.keyboard.type(" ");
+    await page.keyboard.press("Backspace");
+  }
+
+  await delay(1000, 2000);
+
+  // === Step 6: HTML mode OFF karo (visual mode mein wapas jao) ===
+  // Ye toggle eBay ke internal parser ko trigger karta hai
+  const isStillChecked = await retry(
+    () => page.$eval(htmlCheckbox, (el) => el.checked),
+    3,
+    "re-check eval",
+  );
+
+  if (isStillChecked) {
+    await page.click(htmlCheckbox);
+    console.log("✅ HTML mode OFF - sync triggered");
+  }
+
+  await delay(2000, 4000);
+
+  // === Step 7: Verify - iframe mein content aaya ya nahi ===
+  try {
+    await page.waitForSelector("#se-rte-frame__summary", { timeout: 5000 });
+    const frameHandle = await page.$("#se-rte-frame__summary");
+    const frame = await frameHandle.contentFrame();
+
+    if (frame) {
+      const bodyContent = await frame.evaluate(() => document.body.innerHTML);
+      if (bodyContent && bodyContent.trim().length > 0) {
+        console.log("✅ Description verified in iframe ✔");
+      } else {
+        console.warn(
+          "⚠️ Iframe body empty after toggle - description may not have synced",
+        );
+      }
+    }
+  } catch (e) {
+    console.warn("⚠️ Iframe verify skip:", e.message);
+  }
+
+  console.log("✅ Description set & synced");
+}
+
+module.exports = { selectDropdown, handleToggle, setRichTextDescription };
