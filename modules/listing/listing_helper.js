@@ -1,3 +1,5 @@
+const cheerio = require("cheerio");
+
 const {
   delay,
   safeWaitFor,
@@ -6,36 +8,47 @@ const {
   retry,
 } = require("../../utils/utils");
 
-async function selectDropdown(page, selector, text) {
+async function selectShippingPolicy(page, numericPrice) {
+  const selector = "input[name='shippingPolicyId']";
+
   try {
+    const optionText = Number(numericPrice) < 60 ? "60 se kam" : "61 se jada";
+
     await page.waitForSelector(selector, { visible: true });
 
-    // click input
-    await page.click(selector, { clickCount: 3 });
+    // ✅ force open dropdown
+    await page.click(selector);
 
-    // clear + type
-    await page.keyboard.press("Backspace");
-    await page.keyboard.type(text, { delay: 100 });
-
-    // wait for suggestions
-    await delay(2000, 4000);
-
-    // select first match
-    await page.keyboard.press("ArrowDown");
-    await page.keyboard.press("Enter");
-
-    // confirm
+    // optional: ensure aria-expanded true
     await page.waitForFunction(
-      (selector, text) => {
-        const el = document.querySelector(selector);
-        return el && el.value.toLowerCase().includes(text.toLowerCase());
+      (sel) => {
+        const el = document.querySelector(sel);
+        return el && el.getAttribute("aria-expanded") === "true";
       },
       {},
       selector,
-      text,
     );
 
-    console.log("✅ Dropdown selected:", text);
+    // ✅ directly click option (no waitForSelector needed)
+    const clicked = await page.evaluate((text) => {
+      const options = Array.from(
+        document.querySelectorAll("div[role='option']"),
+      );
+
+      const match = options.find((opt) =>
+        opt.innerText.trim().toLowerCase().startsWith(text.toLowerCase()),
+      );
+
+      if (match) {
+        match.click();
+        return true;
+      }
+      return false;
+    }, optionText);
+
+    if (!clicked) throw new Error("Option not found");
+
+    console.log("✅ Dropdown selected:", optionText);
   } catch (err) {
     console.log("❌ Dropdown error:", err.message);
   }
@@ -102,8 +115,36 @@ async function handleToggle(page) {
   }
 }
 
+function enhanceDescription(description) {
+  if (!description) return "";
+
+  // 'false' isliye taki cheerio extra <html><body> tags add na kare
+  const $ = cheerio.load(description, null, false);
+
+  $("*").each((i, el) => {
+    const text = $(el).text().toUpperCase();
+
+    if (text.includes("WELCOME")) {
+      const hasChildWithWelcome =
+        $(el)
+          .children()
+          .filter((_, child) => {
+            return $(child).text().toUpperCase().includes("WELCOME");
+          }).length > 0;
+
+      if (!hasChildWithWelcome) {
+        $(el).html(`Welcome to ${process.env.BRAND_NAME || "somya selese"}`);
+      }
+    }
+  });
+
+  return $.html();
+}
+
 async function setRichTextDescription(page, html) {
   const htmlCheckbox = "input[name='descriptionEditorMode']";
+
+  html = enhanceDescription(html);
 
   // === Step 1: Wait for checkbox ===
   await safeWaitFor(page, htmlCheckbox, 15000);
@@ -200,4 +241,9 @@ async function setRichTextDescription(page, html) {
   console.log("✅ Description set & synced");
 }
 
-module.exports = { selectDropdown, handleToggle, setRichTextDescription };
+module.exports = {
+  selectShippingPolicy,
+  enhanceDescription,
+  handleToggle,
+  setRichTextDescription,
+};

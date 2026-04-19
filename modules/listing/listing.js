@@ -17,9 +17,9 @@ const {
 const { createListingPage } = require("./listing_browser");
 const path = require("path");
 const {
-  selectDropdown,
   handleToggle,
   setRichTextDescription,
+  selectShippingPolicy,
 } = require("./listing_helper");
 
 async function listingProduct(listing_url) {
@@ -76,10 +76,48 @@ async function listingProduct(listing_url) {
 
       await delay(4000, 6000);
 
-      // ⏳ wait table load
-      await safeWaitFor(page, ".static-table__table-content", 15000);
+      let isNoResult = false;
+      let tableFound = false;
+
+      try {
+        await Promise.race([
+          page
+            .waitForSelector(".static-table__table-content", {
+              timeout: 15000,
+            })
+            .then(() => {
+              tableFound = true;
+            }),
+
+          page
+            .waitForSelector(".page-notice__title", {
+              timeout: 15000,
+            })
+            .then(async (el) => {
+              const text = await el.evaluate((e) => e.innerText);
+              if (text.includes("No sold results found")) {
+                isNoResult = true;
+              }
+            }),
+        ]);
+      } catch (err) {
+        console.log("⚠️ Nothing loaded (timeout)");
+      }
+
+      // ❌ Case 1: No result
+      if (isNoResult) {
+        console.log("❌ No results → skipping loop");
+        continue;
+      }
+
+      // ❌ Case 2: Neither table nor notice
+      if (!tableFound) {
+        console.log("⚠️ Table not found → skipping loop");
+        continue;
+      }
+
       await detectCaptcha(page);
-      await randomBehavior(page); // human like action
+      await randomBehavior(page);
 
       console.log("📊 Table loaded");
 
@@ -166,7 +204,7 @@ async function listingProduct(listing_url) {
 
       await page.type(priceSelector, String(numericPrice), { delay: 50 });
 
-      console.log("💰 Price inserted");
+      console.log("💰 Price inserted", numericPrice);
 
       await delay(2000, 4000);
 
@@ -179,18 +217,13 @@ async function listingProduct(listing_url) {
       await page.click(qtySelector, { clickCount: 3 });
       await page.keyboard.press("Backspace");
 
-      // type 5
       await page.type(qtySelector, "5", { delay: 50 });
 
       console.log("📦 Quantity set to 5");
 
       await delay(4000, 8000);
 
-      const comboInput = "input[name='shippingPolicyId']";
-
-      const optionText = numericPrice < 60 ? "60 se kam" : "61 se jada";
-
-      await selectDropdown(page, comboInput, optionText);
+      await selectShippingPolicy(page, numericPrice);
 
       await delay(4000, 8000);
 
